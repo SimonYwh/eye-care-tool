@@ -126,6 +126,7 @@ def release_monitors(monitors: list[MonitorInfo]):
     根据 DC 来源使用正确的释放方式：
     - CreateDCW 创建的 DC → DeleteDC
     - GetDC 获取的 DC → ReleaseDC
+    释放后清零 hdc，防止悬垂句柄被误用。
     """
     for m in monitors:
         if m.hdc:
@@ -133,6 +134,7 @@ def release_monitors(monitors: list[MonitorInfo]):
                 _gdi32.DeleteDC(m.hdc)
             else:
                 _user32.ReleaseDC(None, m.hdc)
+            m.hdc = 0  # 释放后清零，防止悬垂句柄
 
 
 def get_monitor_hdcs(monitors: list[MonitorInfo]) -> list:

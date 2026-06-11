@@ -1,6 +1,7 @@
 """应用配置和预设管理"""
 import json
 import os
+import tempfile
 from pathlib import Path
 
 # ─── 预设定义 ───────────────────────────────────────────────────────────────
@@ -60,7 +61,10 @@ def load_settings() -> dict:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 saved = json.load(f)
             if isinstance(saved, dict):
-                defaults.update(saved)
+                # 只合并已知键，丢弃未知键防止配置文件膨胀
+                known_keys = set(defaults.keys())
+                filtered = {k: v for k, v in saved.items() if k in known_keys}
+                defaults.update(filtered)
         except (json.JSONDecodeError, OSError):
             # JSON 解析错误或文件读取错误，使用默认值
             pass
@@ -78,9 +82,9 @@ def load_settings() -> dict:
         brightness = BRIGHTNESS_DEFAULT
     defaults["brightness"] = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, int(brightness)))
 
-    # last_preset：必须是字符串
+    # last_preset：必须是字符串且是有效的预设键
     preset = defaults.get("last_preset", "day")
-    if not isinstance(preset, str):
+    if not isinstance(preset, str) or preset not in PRESETS:
         defaults["last_preset"] = "day"  # 与启动默认一致
 
     # auto_start：必须是 bool
@@ -96,11 +100,23 @@ def load_settings() -> dict:
 
 
 def save_settings(settings: dict):
-    """保存用户设置到 JSON"""
+    """保存用户设置到 JSON（原子写入，防止崩溃导致数据丢失）"""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2, ensure_ascii=False)
+        # 先写入临时文件，再原子替换，防止崩溃时截断原文件
+        fd, tmp_path = tempfile.mkstemp(
+            dir=str(CONFIG_DIR), suffix=".tmp", prefix="settings_")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, str(CONFIG_FILE))
+        except BaseException:
+            # 写入失败时清理临时文件
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
     except OSError:
         # 写入失败（磁盘满等），静默忽略
         pass

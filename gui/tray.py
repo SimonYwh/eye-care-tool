@@ -70,10 +70,14 @@ class TrayIcon:
         self._current_temp = 6500
 
     def update_icon(self, temperature: int):
-        """根据色温更新托盘图标颜色"""
+        """根据色温更新托盘图标颜色（应从 Tk 主线程调用）"""
         self._current_temp = temperature
         if self._icon:
-            self._icon.icon = _create_icon_image(temperature)
+            try:
+                self._icon.icon = _create_icon_image(temperature)
+            except Exception:
+                # 图标更新失败（如 shutdown 阶段 Tcl 已销毁），忽略
+                pass
 
     def _build_menu(self) -> pystray.Menu:
         items = []

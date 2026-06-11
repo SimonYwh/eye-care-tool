@@ -17,6 +17,7 @@ class EyeComfortApp(ctk.CTk):
                  on_brightness_change: Optional[Callable[[int], None]] = None,
                  on_preset: Optional[Callable[[str], None]] = None,
                  on_transform_change: Optional[Callable[[str], None]] = None,
+                 on_reset: Optional[Callable[[], None]] = None,
                  on_close: Optional[Callable[[], None]] = None):
         super().__init__()
 
@@ -24,6 +25,7 @@ class EyeComfortApp(ctk.CTk):
         self._on_brightness_change = on_brightness_change
         self._on_preset = on_preset
         self._on_transform_change = on_transform_change
+        self._on_reset = on_reset
         self._on_close = on_close
 
         self._current_temp = TEMP_DEFAULT
@@ -284,13 +286,9 @@ class EyeComfortApp(ctk.CTk):
             self._on_preset(preset_key)
 
     def _on_reset_click(self):
-        """恢复默认：重置预设 + 变换模式"""
-        self._suppress_callbacks = True
-        try:
-            self._on_transform_click("normal")
-        finally:
-            self._suppress_callbacks = False
-        self._on_preset_click("reset")
+        """恢复默认：通过 controller 原子重置（避免双重 gamma 过渡）"""
+        if self._on_reset:
+            self._on_reset()
 
     def _on_transform_click(self, transform_key: str):
         self._current_transform = transform_key

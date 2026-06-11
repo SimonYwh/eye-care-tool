@@ -227,10 +227,6 @@ def apply_gamma_smooth(hdc_list: list, temperature: int, brightness: float,
         interval = TRANSITION_MS / steps / 1000.0
 
         for step in range(1, steps + 1):
-            # 检查 generation 是否变化 — 如果有新过渡启动则退出
-            if _get_generation() != my_gen:
-                return
-
             t = step / steps
             t_eased = t * t * (3 - 2 * t)  # ease-in-out
 
@@ -238,7 +234,14 @@ def apply_gamma_smooth(hdc_list: list, temperature: int, brightness: float,
             apply_ramp_to_all(hdc_list, interpolated)
 
             if step < steps:
+                # 睡眠后、下一帧前检查 generation，确保新过渡能及时取消旧线程
+                if _get_generation() != my_gen:
+                    return
                 time.sleep(interval)
+
+        # 循环正常结束后，确保最终状态精确为目标 ramp（消除浮点误差）
+        if _get_generation() == my_gen:
+            apply_ramp_to_all(hdc_list, target_ramp)
 
     t = threading.Thread(target=_transition, daemon=True)
     t.start()

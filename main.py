@@ -4,14 +4,18 @@
 支持正常/黑白/反色模式切换。
 多显示器使用统一 gamma ramp 确保效果一致。
 """
+import logging
 import threading
 import atexit
+from typing import Optional
 
 from config import PRESETS, TRANSFORMS, TRANSFORM_DEFAULT, TEMP_MIN, TEMP_MAX, load_settings, save_settings
 from core.monitor import enumerate_monitors, get_monitor_hdcs, release_monitors
 from core.gamma import apply_gamma_smooth, apply_gamma_instant, reset_all_gamma
 from gui.app import EyeComfortApp
 from gui.tray import TrayIcon
+
+logger = logging.getLogger(__name__)
 
 
 class EyeComfortController:
@@ -41,6 +45,7 @@ class EyeComfortController:
         self._cleanup_lock = threading.Lock()
         self._save_timer: threading.Timer | None = None
         self._save_lock = threading.Lock()
+        self._reset_in_progress = False  # 防止重置时触发多余 gamma 过渡
 
         # 创建 GUI
         self.app = EyeComfortApp(
@@ -48,6 +53,7 @@ class EyeComfortController:
             on_brightness_change=self._on_brightness_change,
             on_preset=self._on_preset,
             on_transform_change=self._on_transform_change,
+            on_reset=self.reset_to_defaults,
             on_close=self._on_hide_window,
         )
         self.app.set_monitors_info(self.monitors)
@@ -98,46 +104,78 @@ class EyeComfortController:
         preset = PRESETS.get(preset_key)
         if not preset:
             return
+        # 重置模式下跳过 smooth 渐变，等 reset 全部就绪后再一次性应用
+        smooth = not self._reset_in_progress
         self._apply(preset["temp"], preset["brightness"],
-                   self.current_transform, smooth=True)
+                   self.current_transform, smooth=smooth)
         self.app.set_values(preset["temp"], preset["brightness"], preset["name"])
         self.settings["last_preset"] = preset_key
         self._debounced_save()
 
     def _tray_on_preset(self, preset_key: str):
         """托盘菜单预设回调（在 pystray 线程中，路由到主线程）"""
-        self.app.after(0, lambda: self._on_preset(preset_key))
+        try:
+            self.app.after(0, lambda: self._on_preset(preset_key))
+        except Exception:
+            # Tcl 解释器已销毁（shutdown 阶段），忽略
+            pass
 
     def _on_temp_change(self, temp: int):
         """色温滑块变化"""
         self.current_temp = temp
         self._apply(temp, self.current_brightness, self.current_transform, smooth=False)
-        self.settings["temperature"] = temp
-        self.settings["last_preset"] = "custom"
+        with self._save_lock:
+            self.settings["temperature"] = temp
+            self.settings["last_preset"] = "custom"
         self._debounced_save()
 
     def _on_brightness_change(self, brightness: int):
         """亮度滑块变化"""
         self.current_brightness = brightness
         self._apply(self.current_temp, brightness, self.current_transform, smooth=False)
-        self.settings["brightness"] = brightness
-        self.settings["last_preset"] = "custom"
+        with self._save_lock:
+            self.settings["brightness"] = brightness
+            self.settings["last_preset"] = "custom"
         self._debounced_save()
 
     def _on_transform_change(self, transform_key: str):
         """变换模式切换（正常/黑白/反色）"""
         self.current_transform = transform_key
-        self._apply(self.current_temp, self.current_brightness, transform_key, smooth=True)
-        self.settings["transform"] = transform_key
+        # 重置模式下跳过 smooth 渐变，等预设一起原子应用
+        smooth = not self._reset_in_progress
+        self._apply(self.current_temp, self.current_brightness, transform_key, smooth=smooth)
+        with self._save_lock:
+            self.settings["transform"] = transform_key
         self._debounced_save()
 
     def _on_hide_window(self):
         """隐藏主窗口"""
         self.app.withdraw()
 
+    def reset_to_defaults(self):
+        """重置到默认设置（原子操作，不启动任何 smooth 过渡）"""
+        self._reset_in_progress = True
+        try:
+            self.current_transform = TRANSFORM_DEFAULT
+            preset = PRESETS["reset"]
+            self._apply(preset["temp"], preset["brightness"],
+                       TRANSFORM_DEFAULT, smooth=False)
+            self.app.set_values(preset["temp"], preset["brightness"],
+                               preset["name"])
+            self.app.set_transform(TRANSFORM_DEFAULT)
+            with self._save_lock:
+                self.settings["transform"] = TRANSFORM_DEFAULT
+                self.settings["last_preset"] = "reset"
+            self._debounced_save()
+        finally:
+            self._reset_in_progress = False
+
     def _on_show_window(self):
         """从托盘恢复主窗口（路由到主线程）"""
-        self.app.after(0, self._show_window)
+        try:
+            self.app.after(0, self._show_window)
+        except Exception:
+            pass
 
     def _show_window(self):
         self.app.deiconify()
@@ -146,7 +184,11 @@ class EyeComfortController:
 
     def _on_quit(self):
         """退出应用（路由到主线程）"""
-        self.app.after(0, self._do_quit)
+        try:
+            self.app.after(0, self._do_quit)
+        except Exception:
+            # Tcl 解释器已销毁，直接清理
+            self._cleanup()
 
     def _do_quit(self):
         self._cleanup()
@@ -155,7 +197,7 @@ class EyeComfortController:
 
     # ─── 核心操作 ────────────────────────────────────────────────────────────
     def _apply(self, temp: int, brightness: int,
-               transform: str = None,
+               transform: Optional[str] = None,
                smooth: bool = True):
         """应用色温、亮度和变换到所有显示器。
 
@@ -189,9 +231,11 @@ class EyeComfortController:
             self._save_timer.start()
 
     def _do_save(self):
-        """实际执行保存 — 在 _save_lock 保护下读取 settings 快照"""
+        """实际执行保存 — 在 _save_lock 保护下完成快照和写入"""
         with self._save_lock:
-            # 快照当前设置，避免与主线程的 dict 修改竞态
+            if self._cleaned_up:
+                # 清理已完成，跳过保存（_cleanup 会负责最终写入）
+                return
             snapshot = dict(self.settings)
         save_settings(snapshot)
 
@@ -202,23 +246,24 @@ class EyeComfortController:
                 return
             self._cleaned_up = True
 
+        # 取消并等待去抖保存完成，然后在锁内做最终写入
         with self._save_lock:
             if self._save_timer:
                 self._save_timer.cancel()
                 self._save_timer = None
+            try:
+                save_settings(self.settings)
+            except Exception:
+                logger.exception("清理时保存设置失败")
 
-        try:
-            save_settings(self.settings)
-        except Exception:
-            pass
         try:
             reset_all_gamma(self.hdcs)
         except Exception:
-            pass
+            logger.exception("清理时重置 gamma 失败")
         try:
             release_monitors(self.monitors)
         except Exception:
-            pass
+            logger.exception("清理时释放显示器资源失败")
 
     # ─── 启动 ────────────────────────────────────────────────────────────────
     def run(self):
