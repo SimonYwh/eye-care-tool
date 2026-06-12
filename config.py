@@ -82,9 +82,9 @@ def load_settings() -> dict:
         brightness = BRIGHTNESS_DEFAULT
     defaults["brightness"] = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, int(brightness)))
 
-    # last_preset：必须是字符串且是有效的预设键
+    # last_preset：必须是字符串且是有效的预设键，或 None 表示自定义
     preset = defaults.get("last_preset", "day")
-    if not isinstance(preset, str) or preset not in PRESETS:
+    if preset is not None and (not isinstance(preset, str) or preset not in PRESETS):
         defaults["last_preset"] = "day"  # 与启动默认一致
 
     # auto_start：必须是 bool

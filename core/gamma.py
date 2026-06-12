@@ -111,7 +111,7 @@ def build_gamma_ramp(temperature: int, brightness: float,
         ctypes 数组，可直接传给 SetDeviceGammaRamp
     """
     temperature = max(TEMP_MIN, min(TEMP_MAX, temperature))
-    brightness = max(0.05, min(1.0, brightness))
+    brightness = max(BRIGHTNESS_MIN / 100.0, min(1.0, brightness))
 
     r_factor, g_factor, b_factor = kelvin_to_rgb(temperature)
     ramp = _make_ramp_array()

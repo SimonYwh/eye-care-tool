@@ -11,11 +11,11 @@ from config import (
 # ─── 设计规范 ───────────────────────────────────────────────────────────────
 _BG           = "#0f1117"   # 主背景
 _CARD         = "#1a1d27"   # 卡片背景
-_CARD_HOVER   = "#22263a"   # 卡片悬停
 _BORDER       = "#2a2e3a"   # 边框/分隔线
 _TEXT         = "#e8eaed"   # 主文字
 _TEXT_SEC     = "#9aa0b0"   # 次要文字
 _TEXT_MUTED   = "#5f6577"   # 辅助文字
+_STYLE_DEFAULT = ("#2a2d35", "#3a3d48", "#4a4d58")  # 通用按钮默认样式
 
 # 预设按钮配色：(背景, 悬停, 选中)
 _PRESET_STYLE = {
@@ -81,13 +81,27 @@ class EyeComfortApp(ctk.CTk):
         else:
             self.withdraw()
 
+    # ─── 辅助方法 ────────────────────────────────────────────────────────────
+    @staticmethod
+    def _make_card(parent, pady=6, inner_padx=16, inner_pady=10):
+        """创建卡片容器：外层圆角卡片 + 内层透明面板。返回 (card, inner)。"""
+        card = ctk.CTkFrame(parent, fg_color=_CARD, corner_radius=12)
+        card.pack(fill="x", padx=16, pady=pady)
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="x", padx=inner_padx, pady=inner_pady)
+        return card, inner
+
+    @staticmethod
+    def _update_button_highlight(buttons, style_map, active_key):
+        """通用按钮高亮：选中用 active 色，未选用 bg 色。"""
+        for key, btn in buttons.items():
+            bg, _hover, active = style_map.get(key, _STYLE_DEFAULT)
+            btn.configure(fg_color=active if key == active_key else bg)
+
+    # ─── 界面构建 ────────────────────────────────────────────────────────────
     def _build_ui(self):
         # ─── 标题栏 ──────────────────────────────────────────────────────────
-        title_frame = ctk.CTkFrame(self, fg_color=_CARD, corner_radius=12)
-        title_frame.pack(fill="x", padx=16, pady=(12, 6))
-
-        title_inner = ctk.CTkFrame(title_frame, fg_color="transparent")
-        title_inner.pack(fill="x", padx=16, pady=12)
+        _, title_inner = self._make_card(self, pady=(12, 6), inner_padx=16, inner_pady=12)
 
         ctk.CTkLabel(
             title_inner,
@@ -105,15 +119,11 @@ class EyeComfortApp(ctk.CTk):
         self._status_label.pack(side="right")
 
         # ─── 预设按钮 ────────────────────────────────────────────────────────
-        preset_card = ctk.CTkFrame(self, fg_color=_CARD, corner_radius=12)
-        preset_card.pack(fill="x", padx=16, pady=6)
-
-        preset_inner = ctk.CTkFrame(preset_card, fg_color="transparent")
-        preset_inner.pack(fill="x", padx=12, pady=10)
+        _, preset_inner = self._make_card(self)
 
         self._preset_buttons = {}
         for key, preset in PRESETS.items():
-            bg, hover, active = _PRESET_STYLE.get(key, ("#2a2d35", "#3a3d48", "#4a4d58"))
+            bg, hover, _active = _PRESET_STYLE.get(key, _STYLE_DEFAULT)
             btn = ctk.CTkButton(
                 preset_inner,
                 text=preset["name"],
@@ -128,11 +138,7 @@ class EyeComfortApp(ctk.CTk):
             self._preset_buttons[key] = btn
 
         # ─── 变换模式 ────────────────────────────────────────────────────────
-        transform_card = ctk.CTkFrame(self, fg_color=_CARD, corner_radius=12)
-        transform_card.pack(fill="x", padx=16, pady=6)
-
-        transform_inner = ctk.CTkFrame(transform_card, fg_color="transparent")
-        transform_inner.pack(fill="x", padx=12, pady=10)
+        _, transform_inner = self._make_card(self)
 
         ctk.CTkLabel(
             transform_inner,
@@ -143,7 +149,7 @@ class EyeComfortApp(ctk.CTk):
 
         self._transform_buttons = {}
         for key, tf in TRANSFORMS.items():
-            bg, hover, active = _TRANSFORM_STYLE.get(key, ("#2a2d35", "#3a3d48", "#4a4d58"))
+            bg, hover, _active = _TRANSFORM_STYLE.get(key, _STYLE_DEFAULT)
             btn = ctk.CTkButton(
                 transform_inner,
                 text=tf["name"],
@@ -158,11 +164,7 @@ class EyeComfortApp(ctk.CTk):
             self._transform_buttons[key] = btn
 
         # ─── 色温控制 ────────────────────────────────────────────────────────
-        temp_card = ctk.CTkFrame(self, fg_color=_CARD, corner_radius=12)
-        temp_card.pack(fill="x", padx=16, pady=6)
-
-        temp_inner = ctk.CTkFrame(temp_card, fg_color="transparent")
-        temp_inner.pack(fill="x", padx=16, pady=(12, 6))
+        _, temp_inner = self._make_card(self, inner_padx=16, inner_pady=(12, 6))
 
         temp_header = ctk.CTkFrame(temp_inner, fg_color="transparent")
         temp_header.pack(fill="x")
@@ -197,23 +199,10 @@ class EyeComfortApp(ctk.CTk):
         self._temp_slider.set(TEMP_DEFAULT)
         self._temp_slider.pack(fill="x", pady=(8, 0))
 
-        temp_marks = ctk.CTkFrame(temp_inner, fg_color="transparent")
-        temp_marks.pack(fill="x", pady=(2, 0))
-        ctk.CTkLabel(temp_marks, text="2700K",
-                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="left")
-        ctk.CTkLabel(temp_marks, text="暖色",
-                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="left", padx=(4, 0))
-        ctk.CTkLabel(temp_marks, text="冷色",
-                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="right", padx=(0, 4))
-        ctk.CTkLabel(temp_marks, text="6500K",
-                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="right")
+        self._build_slider_marks(temp_inner, "2700K", "暖色", "冷色", "6500K")
 
         # ─── 亮度控制 ────────────────────────────────────────────────────────
-        bright_card = ctk.CTkFrame(self, fg_color=_CARD, corner_radius=12)
-        bright_card.pack(fill="x", padx=16, pady=6)
-
-        bright_inner = ctk.CTkFrame(bright_card, fg_color="transparent")
-        bright_inner.pack(fill="x", padx=16, pady=(12, 6))
+        _, bright_inner = self._make_card(self, inner_padx=16, inner_pady=(12, 6))
 
         bright_header = ctk.CTkFrame(bright_inner, fg_color="transparent")
         bright_header.pack(fill="x")
@@ -248,23 +237,10 @@ class EyeComfortApp(ctk.CTk):
         self._brightness_slider.set(BRIGHTNESS_DEFAULT)
         self._brightness_slider.pack(fill="x", pady=(8, 0))
 
-        bright_marks = ctk.CTkFrame(bright_inner, fg_color="transparent")
-        bright_marks.pack(fill="x", pady=(2, 0))
-        ctk.CTkLabel(bright_marks, text="10%",
-                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="left")
-        ctk.CTkLabel(bright_marks, text="暗",
-                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="left", padx=(4, 0))
-        ctk.CTkLabel(bright_marks, text="亮",
-                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="right", padx=(0, 4))
-        ctk.CTkLabel(bright_marks, text="100%",
-                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="right")
+        self._build_slider_marks(bright_inner, "10%", "暗", "亮", "100%")
 
         # ─── 显示器信息 ──────────────────────────────────────────────────────
-        monitor_card = ctk.CTkFrame(self, fg_color=_CARD, corner_radius=12)
-        monitor_card.pack(fill="x", padx=16, pady=6)
-
-        monitor_inner = ctk.CTkFrame(monitor_card, fg_color="transparent")
-        monitor_inner.pack(fill="x", padx=16, pady=10)
+        _, monitor_inner = self._make_card(self)
 
         ctk.CTkLabel(
             monitor_inner,
@@ -313,6 +289,20 @@ class EyeComfortApp(ctk.CTk):
             command=self._on_window_close,
         ).pack(side="right")
 
+    @staticmethod
+    def _build_slider_marks(parent, min_text, label_left, label_right, max_text):
+        """在滑块下方添加刻度标注。"""
+        marks = ctk.CTkFrame(parent, fg_color="transparent")
+        marks.pack(fill="x", pady=(2, 0))
+        ctk.CTkLabel(marks, text=min_text,
+                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="left")
+        ctk.CTkLabel(marks, text=label_left,
+                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="left", padx=(4, 0))
+        ctk.CTkLabel(marks, text=label_right,
+                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="right", padx=(0, 4))
+        ctk.CTkLabel(marks, text=max_text,
+                     font=ctk.CTkFont(size=10), text_color=_TEXT_MUTED).pack(side="right")
+
     # ─── 事件处理 ────────────────────────────────────────────────────────────
     def _on_preset_click(self, preset_key: str):
         if self._on_preset:
@@ -325,29 +315,12 @@ class EyeComfortApp(ctk.CTk):
 
     def _on_transform_click(self, transform_key: str):
         self._current_transform = transform_key
-        self._update_transform_highlight(transform_key)
+        self._update_button_highlight(self._transform_buttons,
+                                      _TRANSFORM_STYLE, transform_key)
         name = TRANSFORMS[transform_key]["name"]
         self._update_status(name)
         if self._on_transform_change:
             self._on_transform_change(transform_key)
-
-    def _update_transform_highlight(self, active_key: str):
-        """高亮当前选中的变换按钮"""
-        for key, btn in self._transform_buttons.items():
-            bg, hover, active = _TRANSFORM_STYLE.get(key, ("#2a2d35", "#3a3d48", "#4a4d58"))
-            if key == active_key:
-                btn.configure(fg_color=active)   # 选中状态用高亮色
-            else:
-                btn.configure(fg_color=bg)       # 未选中用背景色
-
-    def _update_preset_highlight(self, active_key: str):
-        """高亮当前选中的预设按钮"""
-        for key, btn in self._preset_buttons.items():
-            bg, hover, active = _PRESET_STYLE.get(key, ("#2a2d35", "#3a3d48", "#4a4d58"))
-            if key == active_key:
-                btn.configure(fg_color=active)
-            else:
-                btn.configure(fg_color=bg)
 
     def _on_temp_slider(self, value: float):
         if self._suppress_callbacks:
@@ -386,18 +359,22 @@ class EyeComfortApp(ctk.CTk):
         if label:
             self._update_status(label)
 
-        # 高亮匹配的预设按钮
+        # 高亮匹配的预设按钮（需要 temp、brightness 和 transform 都匹配）
         for key, preset in PRESETS.items():
-            if preset["temp"] == temp and preset["brightness"] == brightness:
-                self._update_preset_highlight(key)
+            if (preset["temp"] == temp
+                    and preset["brightness"] == brightness
+                    and self._current_transform == TRANSFORM_DEFAULT):
+                self._update_button_highlight(self._preset_buttons,
+                                              _PRESET_STYLE, key)
                 return
         # 没有匹配预设时，清除所有高亮
-        self._update_preset_highlight("")
+        self._update_button_highlight(self._preset_buttons, _PRESET_STYLE, None)
 
     def set_transform(self, transform_key: str):
         """设置当前变换模式（由外部调用，如托盘菜单）"""
         self._current_transform = transform_key
-        self._update_transform_highlight(transform_key)
+        self._update_button_highlight(self._transform_buttons,
+                                      _TRANSFORM_STYLE, transform_key)
         name = TRANSFORMS.get(transform_key, {}).get("name", "")
         if name:
             self._update_status(name)
