@@ -74,25 +74,24 @@ class EyeComfortController:
         """恢复上次保存的状态（预设 + 变换模式）"""
         last_preset = self.settings.get("last_preset", "day")
 
-        # 尝试恢复预设
-        if last_preset and last_preset != "reset":
+        # 尝试恢复预设（包括 'reset'）
+        if last_preset:
             preset = PRESETS.get(last_preset)
             if preset:
                 self._apply(preset["temp"], preset["brightness"],
                            self.current_transform, smooth=False)
                 self.app.set_values(preset["temp"], preset["brightness"],
                                    preset["name"])
+                # 恢复变换模式 UI
+                if self.current_transform != TRANSFORM_DEFAULT:
+                    self.app.set_transform(self.current_transform)
                 return
 
         # 没有有效预设 → 应用当前保存的温度/亮度
-        # 使用 PRESETS['reset'] 的值作为"原始"参照，而非硬编码
-        reset_temp = PRESETS["reset"]["temp"]
-        reset_bright = PRESETS["reset"]["brightness"]
-        if self.current_temp != reset_temp or self.current_brightness != reset_bright:
-            self._apply(self.current_temp, self.current_brightness,
-                       self.current_transform, smooth=False)
-            self.app.set_values(self.current_temp, self.current_brightness,
-                               "自定义")
+        self._apply(self.current_temp, self.current_brightness,
+                   self.current_transform, smooth=False)
+        self.app.set_values(self.current_temp, self.current_brightness,
+                           "自定义")
 
         # 恢复变换模式 UI
         if self.current_transform != TRANSFORM_DEFAULT:
@@ -126,7 +125,7 @@ class EyeComfortController:
         self._apply(temp, self.current_brightness, self.current_transform, smooth=False)
         with self._save_lock:
             self.settings["temperature"] = temp
-            self.settings["last_preset"] = "custom"
+            self.settings["last_preset"] = None
         self._debounced_save()
 
     def _on_brightness_change(self, brightness: int):
@@ -135,7 +134,7 @@ class EyeComfortController:
         self._apply(self.current_temp, brightness, self.current_transform, smooth=False)
         with self._save_lock:
             self.settings["brightness"] = brightness
-            self.settings["last_preset"] = "custom"
+            self.settings["last_preset"] = None
         self._debounced_save()
 
     def _on_transform_change(self, transform_key: str):

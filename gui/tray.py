@@ -16,22 +16,20 @@ def _create_icon_image(temp: int = 6500, size: int = 64) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # 夹持温度到有效范围，防止图标颜色异常
     temp = max(2700, min(6500, temp))
-    # 根据色温计算颜色
-    # 2700K → 暖橙 (255, 170, 50)
-    # 6500K → 浅蓝白 (180, 210, 255)
     t = (temp - 2700) / (6500 - 2700)  # 0~1
-    r = int(255 - t * 75)
-    g = int(170 + t * 40)
-    b = int(50 + t * 205)
+
+    # 暖色 → 冷色渐变
+    r = int(255 - t * 80)
+    g = int(175 + t * 40)
+    b = int(55 + t * 200)
 
     center = size // 2
-    radius = size // 2 - 4
+    radius = size // 2 - 5
 
-    # 外圈光晕
-    for i in range(radius + 4, radius - 1, -1):
-        alpha = int(80 * (1 - (i - radius + 1) / 5))
+    # 外圈柔光
+    for i in range(radius + 6, radius, -1):
+        alpha = int(50 * (1 - (i - radius) / 6))
         draw.ellipse(
             [center - i, center - i, center + i, center + i],
             fill=(r, g, b, alpha),
@@ -40,15 +38,22 @@ def _create_icon_image(temp: int = 6500, size: int = 64) -> Image.Image:
     # 实心圆
     draw.ellipse(
         [center - radius, center - radius, center + radius, center + radius],
-        fill=(r, g, b, 255),
+        fill=(r, g, b, 240),
     )
 
-    # 中心高光
-    highlight_r = radius // 3
+    # 内环高光
+    inner = radius - 3
     draw.ellipse(
-        [center - highlight_r - 2, center - highlight_r - 4,
-         center + highlight_r - 2, center + highlight_r - 4],
-        fill=(min(255, r + 60), min(255, g + 60), min(255, b + 60), 120),
+        [center - inner, center - inner, center + inner, center + inner],
+        fill=(min(255, r + 20), min(255, g + 20), min(255, b + 20), 60),
+    )
+
+    # 中心高光点
+    hl = radius // 3
+    draw.ellipse(
+        [center - hl - 2, center - hl - 4,
+         center + hl - 2, center + hl - 4],
+        fill=(min(255, r + 70), min(255, g + 70), min(255, b + 70), 100),
     )
 
     return img
