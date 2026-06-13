@@ -26,7 +26,8 @@ BRIGHTNESS_DEFAULT = 90    # 开机默认亮度 90%
 TRANSFORMS = {
     "normal":   {"name": "🌈 正常", "desc": "标准色彩"},
     "grayscale": {"name": "🔘 黑白", "desc": "灰度模式"},
-    "invert":    {"name": "🔄 反色", "desc": "颜色反转"},
+    "invert":    {"name": "⬛ 反色", "desc": "颜色反转"},
+    "light":     {"name": "🌸 淡色", "desc": "低饱和度柔和"},
 }
 TRANSFORM_DEFAULT = "normal"
 

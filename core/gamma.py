@@ -3,8 +3,9 @@
 核心原理：通过操控显卡的 gamma 查找表 (LUT) 来改变所有像素的输出。
 - 色温：调整 R/G/B 三通道的比例（低色温 = 减蓝增红绿）
 - 亮度：整体缩放 gamma 曲线
-- 灰度：将 RGB 转为亮度值，三通道使用相同值
-- 反色：反转 gamma 曲线
+- 黑白：阈值化为纯黑纯白
+- 反色：递减曲线反转明暗
+- 淡色：对比度压缩 + 固定暖色调，低饱和度柔和
 - 多显示器一致性：构建一份 gamma ramp，同时应用到所有显示器
 - 过渡取消：使用 generation counter 确保旧过渡线程可靠退出
 """
@@ -29,11 +30,6 @@ _get_gamma_ramp.argtypes = [ctypes.wintypes.HDC, ctypes.c_void_p]
 _get_gamma_ramp.restype = ctypes.wintypes.BOOL
 
 RAMP_SIZE = 256
-
-# ITU-R BT.601 亮度系数（用于灰度转换）
-_LUM_R = 0.299
-_LUM_G = 0.587
-_LUM_B = 0.114
 
 # ─── 过渡管理 ────────────────────────────────────────────────────────────────
 # 使用 generation counter 而非 Event 来取消旧过渡：
@@ -110,7 +106,7 @@ def build_gamma_ramp(temperature: int, brightness: float,
     Args:
         temperature: 色温 (自动夹持到 TEMP_MIN~TEMP_MAX)
         brightness: 亮度系数 (自动夹持到 0.05~1.0，防止全黑)
-        transform: 变换模式 — "normal" / "grayscale" / "invert"
+        transform: 变换模式 — "normal" / "grayscale" / "invert" / "light"
 
     Returns:
         ctypes 数组，可直接传给 SetDeviceGammaRamp
@@ -119,25 +115,36 @@ def build_gamma_ramp(temperature: int, brightness: float,
     brightness = max(0.05, min(1.0, brightness))
 
     r_factor, g_factor, b_factor = kelvin_to_rgb(temperature)
+    lr, lg, lb = kelvin_to_rgb(6000)          # 淡色模式固定暖色调
     ramp = _make_ramp_array()
 
     for i in range(RAMP_SIZE):
         normalized = i / 255.0  # 0~1
 
-        # 应用色温 + 亮度
+        # 默认：应用色温 + 亮度
         r_val = normalized * r_factor * brightness
         g_val = normalized * g_factor * brightness
         b_val = normalized * b_factor * brightness
 
         # ─── 变换 ────────────────────────────────────────────────────────
         if transform == "grayscale":
-            gray = _LUM_R * r_val + _LUM_G * g_val + _LUM_B * b_val
-            r_val = g_val = b_val = gray
+            # 纯黑白：阈值化为纯黑或纯白（忽略色温）
+            if normalized > 0.5:
+                r_val = g_val = b_val = brightness
+            else:
+                r_val = g_val = b_val = 0.0
 
         elif transform == "invert":
-            r_val = brightness * r_factor - r_val
-            g_val = brightness * g_factor - g_val
-            b_val = brightness * b_factor - b_val
+            # 递减曲线反转：暗变亮、亮变暗，保留灰度层次
+            r_val = g_val = b_val = (1.0 - normalized) * brightness
+
+        elif transform == "light":
+            # 淡色：对比度压缩 + 固定暖色调，低饱和度柔和效果
+            contrast = 0.65
+            soft = 0.5 + (normalized - 0.5) * contrast
+            r_val = soft * lr * brightness
+            g_val = soft * lg * brightness
+            b_val = soft * lb * brightness
 
         # 限制到 [0, 1]，映射到 16-bit
         ramp[i]                  = int(max(0.0, min(1.0, r_val)) * 65535)

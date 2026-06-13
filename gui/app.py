@@ -12,6 +12,15 @@ from config import (
 class EyeComfortApp(ctk.CTk):
     """护眼软件主窗口"""
 
+    # 变换模式按钮配色 — (默认色, 高亮色)
+    _TRANSFORM_COLORS = {
+        "normal":    ("#2d5a3d", "#3a7a5a"),    # 绿色调 — 正常
+        "grayscale": ("#4a4a4a", "#666666"),     # 灰色 — 黑白
+        "invert":    ("#2a2a2a", "#404040"),     # 深灰色 — 反色
+        "light":     ("#6b4a5a", "#8b6a7a"),     # 粉紫色 — 淡色
+    }
+    _TRANSFORM_COLOR_DEFAULT = ("#3d3d3d", "#555555")
+
     def __init__(self,
                  on_temp_change: Optional[Callable[[int], None]] = None,
                  on_brightness_change: Optional[Callable[[int], None]] = None,
@@ -39,12 +48,12 @@ class EyeComfortApp(ctk.CTk):
     # ─── 窗口设置 ────────────────────────────────────────────────────────────
     def _setup_window(self):
         self.title("👁 护眼助手")
-        self.geometry("420x620")
+        self.geometry("480x620")
         self.resizable(False, False)
         self.configure(fg_color="#1a1a2e")
 
         self.update_idletasks()
-        w, h = 420, 620
+        w, h = 480, 620
         x = (self.winfo_screenwidth() - w) // 2
         y = (self.winfo_screenheight() - h) // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
@@ -102,25 +111,13 @@ class EyeComfortApp(ctk.CTk):
             btn.pack(side="left", expand=True, fill="x", padx=2)
             self._preset_buttons[key] = btn
 
-        # ─── 变换模式按钮（黑白 / 反色）──────────────────────────────────────
+        # ─── 变换模式按钮 ───────────────────────────────────────────────────
         transform_frame = ctk.CTkFrame(self, fg_color="transparent")
         transform_frame.pack(fill="x", padx=20, pady=(4, 4))
 
-        ctk.CTkLabel(
-            transform_frame,
-            text="🎨 模式",
-            font=ctk.CTkFont(size=12),
-            text_color="#888888",
-        ).pack(side="left", padx=(0, 8))
-
         self._transform_buttons = {}
-        transform_colors = {
-            "normal":    ("#2d5a3d", "#3a7a5a"),    # 绿色调 — 正常
-            "grayscale": ("#4a4a4a", "#666666"),     # 灰色 — 黑白
-            "invert":    ("#5a3d5a", "#7a5a7a"),     # 紫色调 — 反色
-        }
         for key, tf in TRANSFORMS.items():
-            fg, hover = transform_colors.get(key, ("#3d3d3d", "#555555"))
+            fg, hover = self._TRANSFORM_COLORS.get(key, self._TRANSFORM_COLOR_DEFAULT)
             btn = ctk.CTkButton(
                 transform_frame,
                 text=tf["name"],
@@ -246,7 +243,7 @@ class EyeComfortApp(ctk.CTk):
             text="检测中...",
             font=ctk.CTkFont(size=11),
             text_color="#888888",
-            wraplength=380,
+            wraplength=400,
             justify="left",
         )
         self._monitors_label.pack(anchor="w", pady=(2, 0))
@@ -263,7 +260,6 @@ class EyeComfortApp(ctk.CTk):
             hover_color="#555566",
             corner_radius=8,
             height=34,
-            width=120,
             command=self._on_reset_click,
         ).pack(side="left")
 
@@ -275,7 +271,6 @@ class EyeComfortApp(ctk.CTk):
             hover_color="#555566",
             corner_radius=8,
             height=34,
-            width=120,
             command=self._on_window_close,
         ).pack(side="right")
 
@@ -293,6 +288,7 @@ class EyeComfortApp(ctk.CTk):
     def _on_transform_click(self, transform_key: str):
         self._current_transform = transform_key
         self._update_transform_highlight(transform_key)
+        self._update_slider_state(transform_key)
         name = TRANSFORMS[transform_key]["name"]
         self._update_status(name)
         if self._on_transform_change:
@@ -300,17 +296,18 @@ class EyeComfortApp(ctk.CTk):
 
     def _update_transform_highlight(self, active_key: str):
         """高亮当前选中的变换按钮"""
-        transform_colors = {
-            "normal":    ("#2d5a3d", "#3a7a5a"),
-            "grayscale": ("#4a4a4a", "#666666"),
-            "invert":    ("#5a3d5a", "#7a5a7a"),
-        }
         for key, btn in self._transform_buttons.items():
-            fg, hover = transform_colors.get(key, ("#3d3d3d", "#555555"))
+            fg, hover = self._TRANSFORM_COLORS.get(key, self._TRANSFORM_COLOR_DEFAULT)
             if key == active_key:
                 btn.configure(fg_color=hover)  # 选中状态用亮色
             else:
                 btn.configure(fg_color=fg)     # 未选中用暗色
+
+    def _update_slider_state(self, transform_key: str):
+        """非 normal 模式下禁用色温滑块（这些模式忽略色温设置）"""
+        is_normal = (transform_key == "normal")
+        state = "normal" if is_normal else "disabled"
+        self._temp_slider.configure(state=state)
 
     def _on_temp_slider(self, value: float):
         if self._suppress_callbacks:
@@ -353,6 +350,7 @@ class EyeComfortApp(ctk.CTk):
         """设置当前变换模式（由外部调用，如托盘菜单）"""
         self._current_transform = transform_key
         self._update_transform_highlight(transform_key)
+        self._update_slider_state(transform_key)
         name = TRANSFORMS.get(transform_key, {}).get("name", "")
         if name:
             self._update_status(name)

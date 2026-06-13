@@ -1,7 +1,7 @@
 """护眼助手 — 主入口
 
 一键调节所有屏幕的色温和亮度。
-支持正常/黑白/反色模式切换。
+支持正常/黑白/反色/淡色模式切换。
 多显示器使用统一 gamma ramp 确保效果一致。
 """
 import logging
@@ -139,7 +139,7 @@ class EyeComfortController:
         self._debounced_save()
 
     def _on_transform_change(self, transform_key: str):
-        """变换模式切换（正常/黑白/反色）"""
+        """变换模式切换（正常/黑白/反色/淡色）"""
         self.current_transform = transform_key
         # 重置模式下跳过 smooth 渐变，等预设一起原子应用
         smooth = not self._reset_in_progress
