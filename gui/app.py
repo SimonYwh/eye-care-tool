@@ -30,6 +30,7 @@ _TRANSFORM_STYLE = {
     "normal":    ("#1e3a2e", "#2a5a42", "#3a7a5a"),
     "grayscale": ("#303038", "#484850", "#606068"),
     "invert":    ("#3a2a4a", "#5a3a6a", "#7a5a8a"),
+    "light":     ("#3a2a3a", "#5a4a5a", "#7a6a7a"),
 }
 
 
@@ -317,10 +318,16 @@ class EyeComfortApp(ctk.CTk):
         self._current_transform = transform_key
         self._update_button_highlight(self._transform_buttons,
                                       _TRANSFORM_STYLE, transform_key)
+        self._update_slider_state(transform_key)
         name = TRANSFORMS[transform_key]["name"]
         self._update_status(name)
         if self._on_transform_change:
             self._on_transform_change(transform_key)
+
+    def _update_slider_state(self, transform_key: str):
+        """非 normal 模式下禁用色温滑块（这些模式忽略色温设置）"""
+        state = "normal" if transform_key == "normal" else "disabled"
+        self._temp_slider.configure(state=state)
 
     def _on_temp_slider(self, value: float):
         if self._suppress_callbacks:
@@ -375,6 +382,7 @@ class EyeComfortApp(ctk.CTk):
         self._current_transform = transform_key
         self._update_button_highlight(self._transform_buttons,
                                       _TRANSFORM_STYLE, transform_key)
+        self._update_slider_state(transform_key)
         name = TRANSFORMS.get(transform_key, {}).get("name", "")
         if name:
             self._update_status(name)
