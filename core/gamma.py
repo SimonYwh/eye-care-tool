@@ -3,8 +3,9 @@
 核心原理：通过操控显卡的 gamma 查找表 (LUT) 来改变所有像素的输出。
 - 色温：调整 R/G/B 三通道的比例（低色温 = 减蓝增红绿）
 - 亮度：整体缩放 gamma 曲线
-- 灰度：均匀灰阶（色温不影响），三通道使用相同亮度值
+- 黑白：均匀灰阶（色温不影响），三通道使用相同亮度值
 - 反色：反转输入亮度后叠加色温色调
+- 淡色：对比度压缩 + 固定暖色调，低饱和度柔和
 - 多显示器一致性：构建一份 gamma ramp，同时应用到所有显示器
 - 过渡取消：使用 generation counter 确保旧过渡线程可靠退出
 """
@@ -105,7 +106,7 @@ def build_gamma_ramp(temperature: int, brightness: float,
     Args:
         temperature: 色温 (自动夹持到 TEMP_MIN~TEMP_MAX)
         brightness: 亮度系数 (自动夹持到 0.05~1.0，防止全黑)
-        transform: 变换模式 — "normal" / "grayscale" / "invert"
+        transform: 变换模式 — "normal" / "grayscale" / "invert" / "light"
 
     Returns:
         ctypes 数组，可直接传给 SetDeviceGammaRamp
@@ -114,6 +115,7 @@ def build_gamma_ramp(temperature: int, brightness: float,
     brightness = max(BRIGHTNESS_MIN / 100.0, min(1.0, brightness))
 
     r_factor, g_factor, b_factor = kelvin_to_rgb(temperature)
+    lr, lg, lb = kelvin_to_rgb(6000)          # 淡色模式固定暖色调
     ramp = _make_ramp_array()
 
     for i in range(RAMP_SIZE):
@@ -131,6 +133,14 @@ def build_gamma_ramp(temperature: int, brightness: float,
             r_val = inv * r_factor
             g_val = inv * g_factor
             b_val = inv * b_factor
+
+        elif transform == "light":
+            # 淡色：对比度压缩 + 固定暖色调，低饱和度柔和效果
+            contrast = 0.65
+            soft = 0.5 + (normalized - 0.5) * contrast
+            r_val = soft * lr * brightness
+            g_val = soft * lg * brightness
+            b_val = soft * lb * brightness
 
         else:
             # 正常模式：色温 + 亮度
