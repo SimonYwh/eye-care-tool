@@ -53,7 +53,7 @@ class EyeComfortController:
             on_temp_change=self._on_temp_change,
             on_brightness_change=self._on_brightness_change,
             on_preset=self._on_preset,
-            on_transform_change=self._on_transform_change,
+            on_transform_change=self._select_transform,
             on_reset=self.reset_to_defaults,
             on_close=self._on_hide_window,
         )
@@ -87,6 +87,7 @@ class EyeComfortController:
                 # 恢复变换模式 UI
                 if self.current_transform != TRANSFORM_DEFAULT:
                     self.app.set_transform(self.current_transform)
+                self.tray.set_transform(self.current_transform)
                 return
 
         # 没有有效预设 → 应用当前保存的温度/亮度
@@ -98,6 +99,7 @@ class EyeComfortController:
         # 恢复变换模式 UI
         if self.current_transform != TRANSFORM_DEFAULT:
             self.app.set_transform(self.current_transform)
+        self.tray.set_transform(self.current_transform)
 
     # ─── 事件处理 ────────────────────────────────────────────────────────────
     def _on_preset(self, preset_key: str):
@@ -113,24 +115,28 @@ class EyeComfortController:
         self.settings["last_preset"] = preset_key
         self._debounced_save()
 
+    def _run_on_ui_thread(self, callback):
+        try:
+            self.app.after(0, callback)
+        except Exception:
+            pass
+
     def _tray_on_preset(self, preset_key: str):
         """托盘菜单预设回调（在 pystray 线程中，路由到主线程）"""
-        try:
-            self.app.after(0, lambda: self._on_preset(preset_key))
-        except Exception:
-            # Tcl 解释器已销毁（shutdown 阶段），忽略
-            pass
+        self._run_on_ui_thread(lambda: self._on_preset(preset_key))
 
     def _tray_on_transform(self, transform_key: str):
         """托盘菜单变换模式回调（在 pystray 线程中，路由到主线程）"""
-        try:
-            self.app.after(0, lambda: self._apply_tray_transform(transform_key))
-        except Exception:
-            pass
+        self._run_on_ui_thread(lambda: self._select_transform(transform_key))
 
-    def _apply_tray_transform(self, transform_key: str):
-        self._on_transform_change(transform_key)
+    def _select_transform(self, transform_key: str):
+        if transform_key not in TRANSFORMS:
+            return
         self.app.set_transform(transform_key)
+        self.tray.set_transform(transform_key)
+        if transform_key == self.current_transform:
+            return
+        self._on_transform_change(transform_key)
 
     def _on_temp_change(self, temp: int):
         """色温滑块变化"""
@@ -174,6 +180,7 @@ class EyeComfortController:
                        TRANSFORM_DEFAULT, smooth=False)
             # 先更新变换模式 UI，再设置预设值，确保 set_values 的预设高亮逻辑看到正确的 transform
             self.app.set_transform(TRANSFORM_DEFAULT)
+            self.tray.set_transform(TRANSFORM_DEFAULT)
             self.app.set_values(preset["temp"], preset["brightness"],
                                preset["name"])
             with self._save_lock:
