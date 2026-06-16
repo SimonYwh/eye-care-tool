@@ -56,6 +56,7 @@ class EyeComfortApp(ctk.CTk):
         self._current_temp = TEMP_DEFAULT
         self._current_brightness = BRIGHTNESS_DEFAULT
         self._current_transform = TRANSFORM_DEFAULT
+        self._active_preset_key = None
         self._suppress_callbacks = False
 
         self._setup_window()
@@ -114,11 +115,11 @@ class EyeComfortApp(ctk.CTk):
     def _update_preset_highlight(self):
         active_key = None
         if self._current_transform == TRANSFORM_DEFAULT:
-            for key, preset in PRESETS.items():
-                if (preset["temp"] == self._current_temp
-                        and preset["brightness"] == self._current_brightness):
-                    active_key = key
-                    break
+            preset = PRESETS.get(self._active_preset_key)
+            if (preset
+                    and preset["temp"] == self._current_temp
+                    and preset["brightness"] == self._current_brightness):
+                active_key = self._active_preset_key
         self._update_button_highlight(self._preset_buttons, _PRESET_STYLE, active_key)
 
     # ─── 界面构建 ────────────────────────────────────────────────────────────
@@ -349,6 +350,7 @@ class EyeComfortApp(ctk.CTk):
         temp = int(round(value / 100) * 100)
         temp = max(TEMP_MIN, min(TEMP_MAX, temp))
         self._current_temp = temp
+        self._active_preset_key = None
         self._temp_value_label.configure(text=f"{temp}K")
         self._update_status("自定义")
         if self._on_temp_change:
@@ -359,6 +361,7 @@ class EyeComfortApp(ctk.CTk):
             return
         brightness = int(round(value))
         self._current_brightness = brightness
+        self._active_preset_key = None
         self._brightness_value_label.configure(text=f"{brightness}%")
         self._update_status("自定义")
         if self._on_brightness_change:
@@ -379,6 +382,14 @@ class EyeComfortApp(ctk.CTk):
         self._brightness_value_label.configure(text=f"{brightness}%")
         if label:
             self._update_status(label)
+        self._active_preset_key = None
+        if label:
+            for key, preset in PRESETS.items():
+                if (preset["temp"] == temp
+                        and preset["brightness"] == brightness
+                        and preset["name"] == label):
+                    self._active_preset_key = key
+                    break
         self._update_preset_highlight()
 
     def set_transform(self, transform_key: str):
