@@ -24,10 +24,10 @@ BRIGHTNESS_DEFAULT = 90    # 开机默认亮度 90%
 
 # ─── 变换模式 ───────────────────────────────────────────────────────────────
 TRANSFORMS = {
-    "normal":   {"name": "🌈 正常", "desc": "标准色彩"},
-    "grayscale": {"name": "🔘 黑白", "desc": "灰度模式"},
-    "invert":    {"name": "🔄 反色", "desc": "颜色反转"},
-    "light":     {"name": "🌸 淡色", "desc": "低饱和度柔和"},
+    "normal":    {"name": "🌈 正常", "desc": "标准色彩", "uses_temp": True},
+    "grayscale": {"name": "🔘 黑白", "desc": "灰度模式", "uses_temp": False},
+    "invert":    {"name": "🔄 反色", "desc": "颜色反转", "uses_temp": True},
+    "light":     {"name": "🌸 淡色", "desc": "低饱和度柔和", "uses_temp": False},
 }
 TRANSFORM_DEFAULT = "normal"
 
@@ -45,6 +45,18 @@ else:
 CONFIG_FILE = CONFIG_DIR / "settings.json"
 
 
+def _cleanup_stale_tmp_files():
+    """清理 CONFIG_DIR 中残留的 settings_*.tmp 文件（崩溃中断写入的遗留物）"""
+    if not CONFIG_DIR.exists():
+        return
+    try:
+        for f in CONFIG_DIR.iterdir():
+            if f.name.startswith("settings_") and f.suffix == ".tmp":
+                f.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def load_settings() -> dict:
     """加载用户设置，不存在则返回默认值。
 
@@ -57,6 +69,7 @@ def load_settings() -> dict:
         "last_preset": "day",
         "transform": TRANSFORM_DEFAULT,
     }
+    _cleanup_stale_tmp_files()
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -84,17 +97,20 @@ def load_settings() -> dict:
     defaults["brightness"] = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, int(brightness)))
 
     # last_preset：必须是字符串且是有效的预设键，或 None 表示自定义
+    # 旧版本使用 'custom' 表示自定义，迁移为 None
     preset = defaults.get("last_preset", "day")
-    if preset is not None and (not isinstance(preset, str) or preset not in PRESETS):
+    if preset == "custom":
+        defaults["last_preset"] = None
+    elif preset is not None and (not isinstance(preset, str) or preset not in PRESETS):
         defaults["last_preset"] = "day"  # 与启动默认一致
 
     # auto_start：必须是 bool
     auto = defaults.get("auto_start", False)
     defaults["auto_start"] = bool(auto)
 
-    # transform：必须是合法的变换模式
+    # transform：必须是字符串且是合法的变换模式
     transform = defaults.get("transform", TRANSFORM_DEFAULT)
-    if transform not in TRANSFORMS:
+    if not isinstance(transform, str) or transform not in TRANSFORMS:
         defaults["transform"] = TRANSFORM_DEFAULT
 
     return defaults
@@ -118,6 +134,6 @@ def save_settings(settings: dict):
             except OSError:
                 pass
             raise
-    except OSError:
-        # 写入失败（磁盘满等），静默忽略
+    except Exception:
+        # 写入失败（磁盘满、权限、序列化错误等），静默忽略
         pass
