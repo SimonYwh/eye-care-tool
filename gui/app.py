@@ -366,14 +366,15 @@ class EyeComfortApp(ctk.CTk):
         if label:
             self._update_status(label)
 
-        # 高亮匹配的预设按钮（需要 temp、brightness 和 transform 都匹配）
-        for key, preset in PRESETS.items():
-            if (preset["temp"] == temp
-                    and preset["brightness"] == brightness
-                    and self._current_transform == TRANSFORM_DEFAULT):
-                self._update_button_highlight(self._preset_buttons,
-                                              _PRESET_STYLE, key)
-                return
+        # 高亮匹配的预设按钮（仅在显式设置预设时匹配，避免滑块自定义值巧合匹配）
+        if label:
+            for key, preset in PRESETS.items():
+                if (preset["temp"] == temp
+                        and preset["brightness"] == brightness
+                        and preset["name"] == label):
+                    self._update_button_highlight(self._preset_buttons,
+                                                  _PRESET_STYLE, key)
+                    return
         # 没有匹配预设时，清除所有高亮
         self._update_button_highlight(self._preset_buttons, _PRESET_STYLE, None)
 

@@ -159,9 +159,10 @@ class EyeComfortController:
             preset = PRESETS["reset"]
             self._apply(preset["temp"], preset["brightness"],
                        TRANSFORM_DEFAULT, smooth=False)
+            # 先更新变换模式 UI，再设置预设值，确保 set_values 的预设高亮逻辑看到正确的 transform
+            self.app.set_transform(TRANSFORM_DEFAULT)
             self.app.set_values(preset["temp"], preset["brightness"],
                                preset["name"])
-            self.app.set_transform(TRANSFORM_DEFAULT)
             with self._save_lock:
                 self.settings["transform"] = TRANSFORM_DEFAULT
                 self.settings["last_preset"] = "reset"
@@ -230,13 +231,15 @@ class EyeComfortController:
             self._save_timer.start()
 
     def _do_save(self):
-        """实际执行保存 — 在 _save_lock 保护下完成快照和写入"""
+        """实际执行保存 — 在 _save_lock 保护下完成快照和写入，防止与 _cleanup 并发写文件"""
         with self._save_lock:
             if self._cleaned_up:
                 # 清理已完成，跳过保存（_cleanup 会负责最终写入）
                 return
-            snapshot = dict(self.settings)
-        save_settings(snapshot)
+            try:
+                save_settings(self.settings)
+            except Exception:
+                logger.exception("去抖保存设置失败")
 
     def _cleanup(self):
         """清理：恢复默认 gamma。带重入保护。"""
