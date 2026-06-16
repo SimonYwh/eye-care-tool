@@ -24,10 +24,10 @@ BRIGHTNESS_DEFAULT = 90    # 开机默认亮度 90%
 
 # ─── 变换模式 ───────────────────────────────────────────────────────────────
 TRANSFORMS = {
-    "normal":   {"name": "🌈 正常", "desc": "标准色彩"},
-    "grayscale": {"name": "🔘 黑白", "desc": "灰度模式"},
-    "invert":    {"name": "🔄 反色", "desc": "颜色反转"},
-    "light":     {"name": "🌸 淡色", "desc": "低饱和度柔和"},
+    "normal":    {"name": "🌈 正常", "desc": "标准色彩", "uses_temp": True},
+    "grayscale": {"name": "🔘 黑白", "desc": "灰度模式", "uses_temp": False},
+    "invert":    {"name": "🔄 反色", "desc": "颜色反转", "uses_temp": True},
+    "light":     {"name": "🌸 淡色", "desc": "低饱和度柔和", "uses_temp": False},
 }
 TRANSFORM_DEFAULT = "normal"
 
@@ -92,9 +92,9 @@ def load_settings() -> dict:
     auto = defaults.get("auto_start", False)
     defaults["auto_start"] = bool(auto)
 
-    # transform：必须是合法的变换模式
+    # transform：必须是字符串且是合法的变换模式
     transform = defaults.get("transform", TRANSFORM_DEFAULT)
-    if transform not in TRANSFORMS:
+    if not isinstance(transform, str) or transform not in TRANSFORMS:
         defaults["transform"] = TRANSFORM_DEFAULT
 
     return defaults
