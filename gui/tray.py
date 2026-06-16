@@ -5,7 +5,7 @@ from typing import Callable, Optional
 import pystray
 from PIL import Image, ImageDraw
 
-from config import PRESETS
+from config import PRESETS, TRANSFORMS, TRANSFORM_DEFAULT
 
 
 def _create_icon_image(temp: int = 6500, size: int = 64) -> Image.Image:
@@ -64,15 +64,29 @@ class TrayIcon:
 
     def __init__(self,
                  on_preset: Optional[Callable[[str], None]] = None,
+                 on_transform: Optional[Callable[[str], None]] = None,
                  on_show_window: Optional[Callable[[], None]] = None,
                  on_quit: Optional[Callable[[], None]] = None):
         self._on_preset = on_preset
+        self._on_transform = on_transform
         self._on_show_window = on_show_window
         self._on_quit = on_quit
 
         self._icon: Optional[pystray.Icon] = None
         self._thread: Optional[threading.Thread] = None
         self._current_temp = 6500
+        self._current_transform = TRANSFORM_DEFAULT
+
+    def _make_keyed_items(self, mapping: dict, callback: Optional[Callable[[str], None]],
+                          checked_key: Optional[str] = None) -> list[pystray.MenuItem]:
+        return [
+            pystray.MenuItem(
+                item["name"],
+                lambda *_args, k=key: callback(k) if callback else None,
+                checked=(lambda _item, k=key: k == checked_key) if checked_key is not None else None,
+            )
+            for key, item in mapping.items()
+        ]
 
     def update_icon(self, temperature: int):
         """根据色温更新托盘图标颜色（应从 Tk 主线程调用）"""
@@ -84,17 +98,30 @@ class TrayIcon:
                 # 图标更新失败（如 shutdown 阶段 Tcl 已销毁），忽略
                 pass
 
+    def set_transform(self, transform_key: str):
+        self._current_transform = transform_key if transform_key in TRANSFORMS else TRANSFORM_DEFAULT
+        if self._icon:
+            try:
+                self._icon.menu = self._build_menu()
+            except Exception:
+                pass
+
     def _build_menu(self) -> pystray.Menu:
         items = []
 
-        # 预设子菜单
-        for key, preset in PRESETS.items():
-            items.append(
-                pystray.MenuItem(
-                    preset["name"],
-                    lambda _, k=key: self._on_preset(k) if self._on_preset else None,
-                )
+        items.extend(self._make_keyed_items(PRESETS, self._on_preset))
+
+        items.append(pystray.Menu.SEPARATOR)
+        items.append(
+            pystray.MenuItem(
+                "色彩模式",
+                pystray.Menu(*self._make_keyed_items(
+                    TRANSFORMS,
+                    self._on_transform,
+                    self._current_transform,
+                )),
             )
+        )
 
         items.append(pystray.Menu.SEPARATOR)
         items.append(
