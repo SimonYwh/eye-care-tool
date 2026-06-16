@@ -62,6 +62,7 @@ class EyeComfortController:
         # 创建托盘
         self.tray = TrayIcon(
             on_preset=self._tray_on_preset,
+            on_transform=self._tray_on_transform,
             on_show_window=self._on_show_window,
             on_quit=self._on_quit,
         )
@@ -119,6 +120,17 @@ class EyeComfortController:
         except Exception:
             # Tcl 解释器已销毁（shutdown 阶段），忽略
             pass
+
+    def _tray_on_transform(self, transform_key: str):
+        """托盘菜单变换模式回调（在 pystray 线程中，路由到主线程）"""
+        try:
+            self.app.after(0, lambda: self._apply_tray_transform(transform_key))
+        except Exception:
+            pass
+
+    def _apply_tray_transform(self, transform_key: str):
+        self._on_transform_change(transform_key)
+        self.app.set_transform(transform_key)
 
     def _on_temp_change(self, temp: int):
         """色温滑块变化"""

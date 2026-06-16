@@ -5,7 +5,7 @@ from typing import Callable, Optional
 import pystray
 from PIL import Image, ImageDraw
 
-from config import PRESETS
+from config import PRESETS, TRANSFORMS
 
 
 def _create_icon_image(temp: int = 6500, size: int = 64) -> Image.Image:
@@ -64,9 +64,11 @@ class TrayIcon:
 
     def __init__(self,
                  on_preset: Optional[Callable[[str], None]] = None,
+                 on_transform: Optional[Callable[[str], None]] = None,
                  on_show_window: Optional[Callable[[], None]] = None,
                  on_quit: Optional[Callable[[], None]] = None):
         self._on_preset = on_preset
+        self._on_transform = on_transform
         self._on_show_window = on_show_window
         self._on_quit = on_quit
 
@@ -92,9 +94,23 @@ class TrayIcon:
             items.append(
                 pystray.MenuItem(
                     preset["name"],
-                    lambda _, k=key: self._on_preset(k) if self._on_preset else None,
+                    lambda *_args, k=key: self._on_preset(k) if self._on_preset else None,
                 )
             )
+
+        items.append(pystray.Menu.SEPARATOR)
+        items.append(
+            pystray.MenuItem(
+                "色彩模式",
+                pystray.Menu(*(
+                    pystray.MenuItem(
+                        transform["name"],
+                        lambda *_args, k=key: self._on_transform(k) if self._on_transform else None,
+                    )
+                    for key, transform in TRANSFORMS.items()
+                )),
+            )
+        )
 
         items.append(pystray.Menu.SEPARATOR)
         items.append(
