@@ -56,6 +56,7 @@ class EyeComfortApp(ctk.CTk):
         self._current_temp = TEMP_DEFAULT
         self._current_brightness = BRIGHTNESS_DEFAULT
         self._current_transform = TRANSFORM_DEFAULT
+        self._active_preset_key = None
         self._suppress_callbacks = False
 
         self._setup_window()
@@ -98,6 +99,28 @@ class EyeComfortApp(ctk.CTk):
         for key, btn in buttons.items():
             bg, _hover, active = style_map.get(key, _STYLE_DEFAULT)
             btn.configure(fg_color=active if key == active_key else bg)
+
+    def _update_transform_ui(self, transform_key: str):
+        self._current_transform = transform_key
+        self._update_button_highlight(self._transform_buttons,
+                                      _TRANSFORM_STYLE, transform_key)
+        self._update_slider_state(transform_key)
+        self._update_preset_highlight()
+
+    def _update_slider_state(self, transform_key: str):
+        uses_temp = TRANSFORMS.get(transform_key, {}).get("uses_temp")
+        state = "normal" if uses_temp else "disabled"
+        self._temp_slider.configure(state=state)
+
+    def _update_preset_highlight(self):
+        active_key = None
+        if self._current_transform == TRANSFORM_DEFAULT:
+            preset = PRESETS.get(self._active_preset_key)
+            if (preset
+                    and preset["temp"] == self._current_temp
+                    and preset["brightness"] == self._current_brightness):
+                active_key = self._active_preset_key
+        self._update_button_highlight(self._preset_buttons, _PRESET_STYLE, active_key)
 
     # ─── 界面构建 ────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -315,19 +338,11 @@ class EyeComfortApp(ctk.CTk):
             self._on_reset()
 
     def _on_transform_click(self, transform_key: str):
-        self._current_transform = transform_key
-        self._update_button_highlight(self._transform_buttons,
-                                      _TRANSFORM_STYLE, transform_key)
-        self._update_slider_state(transform_key)
+        self._update_transform_ui(transform_key)
         name = TRANSFORMS[transform_key]["name"]
         self._update_status(name)
         if self._on_transform_change:
             self._on_transform_change(transform_key)
-
-    def _update_slider_state(self, transform_key: str):
-        """非 normal 模式下禁用色温滑块（这些模式忽略色温设置）"""
-        state = "normal" if transform_key == "normal" else "disabled"
-        self._temp_slider.configure(state=state)
 
     def _on_temp_slider(self, value: float):
         if self._suppress_callbacks:
@@ -335,6 +350,7 @@ class EyeComfortApp(ctk.CTk):
         temp = int(round(value / 100) * 100)
         temp = max(TEMP_MIN, min(TEMP_MAX, temp))
         self._current_temp = temp
+        self._active_preset_key = None
         self._temp_value_label.configure(text=f"{temp}K")
         self._update_status("自定义")
         if self._on_temp_change:
@@ -345,6 +361,7 @@ class EyeComfortApp(ctk.CTk):
             return
         brightness = int(round(value))
         self._current_brightness = brightness
+        self._active_preset_key = None
         self._brightness_value_label.configure(text=f"{brightness}%")
         self._update_status("自定义")
         if self._on_brightness_change:
@@ -365,25 +382,19 @@ class EyeComfortApp(ctk.CTk):
         self._brightness_value_label.configure(text=f"{brightness}%")
         if label:
             self._update_status(label)
-
-        # 高亮匹配的预设按钮（仅在显式设置预设时匹配，避免滑块自定义值巧合匹配）
+        self._active_preset_key = None
         if label:
             for key, preset in PRESETS.items():
                 if (preset["temp"] == temp
                         and preset["brightness"] == brightness
                         and preset["name"] == label):
-                    self._update_button_highlight(self._preset_buttons,
-                                                  _PRESET_STYLE, key)
-                    return
-        # 没有匹配预设时，清除所有高亮
-        self._update_button_highlight(self._preset_buttons, _PRESET_STYLE, None)
+                    self._active_preset_key = key
+                    break
+        self._update_preset_highlight()
 
     def set_transform(self, transform_key: str):
         """设置当前变换模式（由外部调用，如托盘菜单）"""
-        self._current_transform = transform_key
-        self._update_button_highlight(self._transform_buttons,
-                                      _TRANSFORM_STYLE, transform_key)
-        self._update_slider_state(transform_key)
+        self._update_transform_ui(transform_key)
         name = TRANSFORMS.get(transform_key, {}).get("name", "")
         if name:
             self._update_status(name)

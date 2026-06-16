@@ -115,7 +115,9 @@ def build_gamma_ramp(temperature: int, brightness: float,
     brightness = max(BRIGHTNESS_MIN / 100.0, min(1.0, brightness))
 
     r_factor, g_factor, b_factor = kelvin_to_rgb(temperature)
-    lr, lg, lb = kelvin_to_rgb(6000)          # 淡色模式固定暖色调
+    if transform == "light":
+        lr, lg, lb = kelvin_to_rgb(6000)
+        contrast = 0.65
     ramp = _make_ramp_array()
 
     for i in range(RAMP_SIZE):
@@ -136,7 +138,6 @@ def build_gamma_ramp(temperature: int, brightness: float,
 
         elif transform == "light":
             # 淡色：对比度压缩 + 固定暖色调，低饱和度柔和效果
-            contrast = 0.65
             soft = 0.5 + (normalized - 0.5) * contrast
             r_val = soft * lr * brightness
             g_val = soft * lg * brightness
