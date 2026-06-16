@@ -12,6 +12,7 @@ from typing import Optional
 from config import PRESETS, TRANSFORMS, TRANSFORM_DEFAULT, TEMP_MIN, TEMP_MAX, load_settings, save_settings
 from core.monitor import enumerate_monitors, get_monitor_hdcs, release_monitors
 from core.gamma import apply_gamma_smooth, apply_gamma_instant, reset_all_gamma
+from core.color_effect import apply_color_effect, shutdown_color_effect
 from gui.app import EyeComfortApp
 from gui.tray import TrayIcon
 
@@ -215,6 +216,8 @@ class EyeComfortController:
 
         brightness_f = brightness / 100.0
 
+        apply_color_effect(transform)
+
         if smooth:
             apply_gamma_smooth(self.hdcs, temp, brightness_f, transform)
         else:
@@ -255,6 +258,10 @@ class EyeComfortController:
             except Exception:
                 logger.exception("清理时保存设置失败")
 
+        try:
+            shutdown_color_effect()
+        except Exception:
+            logger.exception("清理时重置颜色效果失败")
         try:
             reset_all_gamma(self.hdcs)
         except Exception:

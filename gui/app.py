@@ -16,6 +16,8 @@ _TEXT         = "#e8eaed"   # 主文字
 _TEXT_SEC     = "#9aa0b0"   # 次要文字
 _TEXT_MUTED   = "#5f6577"   # 辅助文字
 _STYLE_DEFAULT = ("#2a2d35", "#3a3d48", "#4a4d58")  # 通用按钮默认样式
+_WINDOW_WIDTH = 520
+_WINDOW_HEIGHT = 660
 
 # 预设按钮配色：(背景, 悬停, 选中)
 _PRESET_STYLE = {
@@ -64,15 +66,14 @@ class EyeComfortApp(ctk.CTk):
     # ─── 窗口设置 ────────────────────────────────────────────────────────────
     def _setup_window(self):
         self.title("护眼助手")
-        self.geometry("440x590")
+        self.geometry(f"{_WINDOW_WIDTH}x{_WINDOW_HEIGHT}")
         self.resizable(False, False)
         self.configure(fg_color=_BG)
 
         self.update_idletasks()
-        w, h = 440, 590
-        x = (self.winfo_screenwidth() - w) // 2
-        y = (self.winfo_screenheight() - h) // 2
-        self.geometry(f"{w}x{h}+{x}+{y}")
+        x = (self.winfo_screenwidth() - _WINDOW_WIDTH) // 2
+        y = (self.winfo_screenheight() - _WINDOW_HEIGHT) // 2
+        self.geometry(f"{_WINDOW_WIDTH}x{_WINDOW_HEIGHT}+{x}+{y}")
 
         self.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
@@ -123,7 +124,9 @@ class EyeComfortApp(ctk.CTk):
         _, preset_inner = self._make_card(self)
 
         self._preset_buttons = {}
-        for key, preset in PRESETS.items():
+        for col in range(len(PRESETS)):
+            preset_inner.grid_columnconfigure(col, weight=1, uniform="preset")
+        for col, (key, preset) in enumerate(PRESETS.items()):
             bg, hover, _active = _PRESET_STYLE.get(key, _STYLE_DEFAULT)
             btn = ctk.CTkButton(
                 preset_inner,
@@ -133,9 +136,10 @@ class EyeComfortApp(ctk.CTk):
                 hover_color=hover,
                 corner_radius=8,
                 height=34,
+                width=88,
                 command=lambda k=key: self._on_preset_click(k),
             )
-            btn.pack(side="left", expand=True, fill="x", padx=3)
+            btn.grid(row=0, column=col, sticky="ew", padx=3)
             self._preset_buttons[key] = btn
 
         # ─── 变换模式 ────────────────────────────────────────────────────────
@@ -146,10 +150,12 @@ class EyeComfortApp(ctk.CTk):
             text="色彩模式",
             font=ctk.CTkFont(size=12),
             text_color=_TEXT_SEC,
-        ).pack(side="left", padx=(0, 10))
+        ).grid(row=0, column=0, columnspan=len(TRANSFORMS), sticky="w", pady=(0, 8))
 
         self._transform_buttons = {}
-        for key, tf in TRANSFORMS.items():
+        for col in range(len(TRANSFORMS)):
+            transform_inner.grid_columnconfigure(col, weight=1, uniform="transform")
+        for col, (key, tf) in enumerate(TRANSFORMS.items()):
             bg, hover, _active = _TRANSFORM_STYLE.get(key, _STYLE_DEFAULT)
             btn = ctk.CTkButton(
                 transform_inner,
@@ -159,9 +165,10 @@ class EyeComfortApp(ctk.CTk):
                 hover_color=hover,
                 corner_radius=8,
                 height=32,
+                width=88,
                 command=lambda k=key: self._on_transform_click(k),
             )
-            btn.pack(side="left", expand=True, fill="x", padx=3)
+            btn.grid(row=1, column=col, sticky="ew", padx=3)
             self._transform_buttons[key] = btn
 
         # ─── 色温控制 ────────────────────────────────────────────────────────
